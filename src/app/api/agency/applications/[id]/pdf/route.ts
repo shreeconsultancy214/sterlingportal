@@ -44,13 +44,13 @@ export async function GET(
     const agency = await Agency.findById(user.agencyId);
 
     // Prepare application data
-    const formData = submission.payload;
+    const formData = submission.payload || {};
     const applicationData = {
       ...formData,
       submittedDate: submission.createdAt.toLocaleDateString(),
       agencyName: agency?.name || "Unknown Agency",
       programName: submission.programName || "Advantage Contractor GL",
-    };
+    } as any;
 
     // Generate HTML
     const htmlContent = generateApplicationHTML(applicationData);
@@ -63,7 +63,7 @@ export async function GET(
     });
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({
+    const pdfUint8Array = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: {
@@ -74,6 +74,9 @@ export async function GET(
       },
     });
     await browser.close();
+
+    // Convert Uint8Array to Buffer
+    const pdfBuffer = Buffer.from(pdfUint8Array);
 
     // Return PDF as response
     return new NextResponse(pdfBuffer, {

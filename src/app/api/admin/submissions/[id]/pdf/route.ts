@@ -51,13 +51,13 @@ export async function GET(
     const agency = await Agency.findById(submission.agencyId);
 
     // Prepare application data
-    const formData = submission.payload;
+    const formData = submission.payload || {};
     const applicationData = {
       ...formData,
       submittedDate: submission.createdAt.toLocaleDateString(),
       agencyName: agency?.name || "Unknown Agency",
       programName: (submission as any).programName || "Advantage Contractor GL",
-    };
+    } as any;
 
     // Generate HTML
     const htmlContent = generateApplicationHTML(applicationData);
@@ -68,19 +68,22 @@ export async function GET(
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
       timeout: 30000,
     });
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '20px',
-        right: '20px',
-        bottom: '20px',
-        left: '20px',
-      },
-    });
-    await browser.close();
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      const pdfUint8Array = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '20px',
+          right: '20px',
+          bottom: '20px',
+          left: '20px',
+        },
+      });
+      await browser.close();
+
+      // Convert Uint8Array to Buffer
+      const pdfBuffer = Buffer.from(pdfUint8Array);
 
     // Return PDF as response
     return new NextResponse(pdfBuffer, {

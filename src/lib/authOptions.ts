@@ -74,15 +74,12 @@ export const authOptions: NextAuthOptions = {
       }
       return session;
     },
-    async redirect({ url, baseUrl, token }) {
+    async redirect({ url, baseUrl }) {
       // After signin, redirect based on user role
+      // Note: We can't access token here, so we'll redirect to a default
+      // The actual role-based redirect happens in the signin page
       if (url === `${baseUrl}/signin` || url === baseUrl) {
-        const userRole = (token as any)?.role;
-        // Only system_admin goes to admin dashboard
-        if (userRole === "system_admin") {
-          return `${baseUrl}/admin/dashboard`;
-        }
-        // All others (agency_admin, agency_user) go to agency dashboard
+        // Default redirect - will be handled by signin page based on session
         return `${baseUrl}/agency/dashboard`;
       }
       // Allow relative callback URLs

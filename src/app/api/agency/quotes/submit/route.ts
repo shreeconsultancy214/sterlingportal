@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     let quoteNumber = generateQuoteNumber();
     
     // Ensure uniqueness
-    while (await InsuranceQuote.findOne({ quoteNumber })) {
+    while (await (InsuranceQuote as any).findOne({ quoteNumber })) {
       quoteNumber = generateQuoteNumber();
     }
 
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     expirationDate.setDate(expirationDate.getDate() + 90);
 
     // Create quote
-    const quote = await InsuranceQuote.create({
+    const quote = await (InsuranceQuote as any).create({
       agencyId: user.agencyId,
       userId: user.id,
       programId,
@@ -155,7 +155,7 @@ export async function GET(req: NextRequest) {
 
     await connectDB();
 
-    const quote = await InsuranceQuote.findOne({
+    const quote = await (InsuranceQuote as any).findOne({
       _id: quoteId,
       agencyId: user.agencyId,
     });

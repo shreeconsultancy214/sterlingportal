@@ -275,12 +275,16 @@ export default function QuoteFormPage() {
     }
   };
 
-  const calculateTotalClassCodePercent = () => {
-    return Object.values(formData.classCodeWork).reduce((sum: number, val: any) => sum + (parseFloat(val) || 0), 0);
+  const calculateTotalClassCodePercent = (): number => {
+    const values = Object.values(formData.classCodeWork || {}) as (string | number)[];
+    return values.reduce<number>((sum, val) => {
+      const numVal = typeof val === 'string' || typeof val === 'number' ? parseFloat(String(val)) || 0 : 0;
+      return sum + numVal;
+    }, 0);
   };
 
-  const getRemainingClassCodePercent = () => {
-    const total = calculateTotalClassCodePercent();
+  const getRemainingClassCodePercent = (): number => {
+    const total: number = calculateTotalClassCodePercent();
     return Math.max(0, 100 - total);
   };
 

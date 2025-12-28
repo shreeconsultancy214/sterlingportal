@@ -167,13 +167,12 @@ export async function POST(
 
     // Get agency for binder and email
     const agency = await Agency.findById(submission.agencyId);
+    const formData = submission.payload || {};
 
     // Generate Binder PDF
     let binderPdfUrl = "";
     try {
       console.log("📄 Generating Binder PDF...");
-      
-      const formData = submission.payload || {};
       const binderData = {
         quoteNumber: quote._id.toString().substring(0, 8).toUpperCase(),
         binderDate: new Date().toLocaleDateString(),
@@ -219,7 +218,7 @@ export async function POST(
       });
       const page = await browser.newPage();
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({
+      const pdfUint8Array = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: {
@@ -230,6 +229,9 @@ export async function POST(
         },
       });
       await browser.close();
+
+      // Convert Uint8Array to Buffer
+      const pdfBuffer = Buffer.from(pdfUint8Array);
 
       // Save PDF to storage
       const fileName = `binder-${quote._id.toString()}.pdf`;

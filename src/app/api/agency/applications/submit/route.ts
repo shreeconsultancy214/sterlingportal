@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
       console.log("📄 Generating PDF...");
       
-      pdfBuffer = await page.pdf({
+      const pdfUint8Array = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: {
@@ -127,6 +127,9 @@ export async function POST(req: NextRequest) {
           left: '20px',
         },
       });
+      
+      // Convert Uint8Array to Buffer
+      pdfBuffer = Buffer.from(pdfUint8Array);
       console.log(`📄 PDF generated - Size: ${pdfBuffer.length} bytes`);
       
       await browser.close();

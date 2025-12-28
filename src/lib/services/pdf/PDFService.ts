@@ -83,7 +83,7 @@ export class PDFService {
           console.log("📋 [PDF SERVICE] Calling ProposalPDF.generate()...");
           result = await ProposalPDF.generate(
             submission,
-            quote,
+            quote.toObject ? quote.toObject() : quote,
             agency,
             carrier
           );
@@ -111,8 +111,8 @@ export class PDFService {
 
           result = await FinanceAgreementPDF.generate(
             submission,
-            quote,
-            financePlan
+            quote.toObject ? quote.toObject() : quote,
+            financePlan.toObject ? financePlan.toObject() : financePlan
           );
           documentType = "FINANCE_AGREEMENT";
           documentName = `Finance_Agreement_${submission._id}.pdf`;

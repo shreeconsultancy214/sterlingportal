@@ -141,7 +141,7 @@ export async function POST(
       });
       const page = await browser.newPage();
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({
+      const pdfUint8Array = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: {
@@ -152,6 +152,9 @@ export async function POST(
         },
       });
       await browser.close();
+
+      // Convert Uint8Array to Buffer
+      const pdfBuffer = Buffer.from(pdfUint8Array);
 
       // Save PDF to storage
       const fileName = `proposal-${quote._id.toString()}.pdf`;
@@ -209,7 +212,7 @@ export async function POST(
       });
       const page = await browser.newPage();
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({
+      const pdfUint8Array = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: {
@@ -220,6 +223,9 @@ export async function POST(
         },
       });
       await browser.close();
+
+      // Convert Uint8Array to Buffer
+      const pdfBuffer = Buffer.from(pdfUint8Array);
 
       // Save PDF to storage
       const fileName = `carrier-forms-${quote._id.toString()}.pdf`;

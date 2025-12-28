@@ -43,24 +43,23 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     // Upsert draft (update if exists, create if not)
-    const draft = await QuoteDraft.findOneAndUpdate(
-      {
-        userId: user.id,
-        programId,
-      },
-      {
-        agencyId: user.agencyId,
-        userId: user.id,
-        programId,
-        formData,
-        currentStep: currentStep || 1,
-        updatedAt: new Date(),
-      },
-      {
-        upsert: true,
-        new: true,
-      }
-    );
+    const filter = {
+      userId: user.id,
+      programId,
+    };
+    const update = {
+      agencyId: user.agencyId,
+      userId: user.id,
+      programId,
+      formData,
+      currentStep: currentStep || 1,
+      updatedAt: new Date(),
+    };
+    const options = {
+      upsert: true,
+      new: true,
+    };
+    const draft = await (QuoteDraft as any).findOneAndUpdate(filter, update, options);
 
     return NextResponse.json({
       success: true,
@@ -101,7 +100,7 @@ export async function GET(req: NextRequest) {
 
     await connectDB();
 
-    const draft = await QuoteDraft.findOne({
+    const draft = await (QuoteDraft as any).findOne({
       userId: user.id,
       programId,
     }).sort({ updatedAt: -1 });

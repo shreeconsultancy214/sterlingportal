@@ -85,7 +85,7 @@ export async function POST(
         brokerFeeAmountUSD: acceptedQuote!.brokerFeeAmountUSD,
         finalAmountUSD: acceptedQuote!.finalAmountUSD,
         status: acceptedQuote!.status,
-        acceptedAt: acceptedQuote!.acceptedAt,
+        acceptedAt: new Date(),
         createdAt: acceptedQuote!.createdAt,
       },
     });

@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
       "files",
     ];
 
-    for (const [key, value] of formData.entries()) {
+    for (const [key, value] of Array.from(formData.entries())) {
       if (!excludeFields.includes(key) && key !== "files") {
         // Handle file fields separately
         if (value instanceof File) {

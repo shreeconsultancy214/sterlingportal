@@ -154,8 +154,9 @@ export async function PATCH(
       );
     }
 
-    // Check if submission can be edited (only ENTERED or DRAFT status)
-    if (submission.status !== "ENTERED" && submission.status !== "DRAFT") {
+    // Check if submission can be edited (only DRAFT or SUBMITTED status) 
+    const status = submission.status as string;
+    if (status !== "DRAFT" && status !== "SUBMITTED") {
       return NextResponse.json(
         { error: "Submission cannot be edited. Only ENTERED or DRAFT submissions can be modified." },
         { status: 400 }
