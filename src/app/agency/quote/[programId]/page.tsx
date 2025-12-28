@@ -77,7 +77,6 @@ export default function QuoteFormPage() {
         state: addressComponents.state,
         zip: addressComponents.zip,
       }));
-      handleInteraction();
     }
   );
   const [formData, setFormData] = useState<any>({
