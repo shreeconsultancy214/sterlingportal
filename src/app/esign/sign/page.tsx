@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
 
-export default function ESignSignPage() {
+function ESignSignContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -333,6 +333,21 @@ export default function ESignSignPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ESignSignPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ESignSignContent />
+    </Suspense>
   );
 }
 

@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { signOut } from "next-auth/react";
 
 interface Submission {
@@ -37,7 +37,7 @@ interface PipelineStage {
   color?: string;
 }
 
-export default function AgencyDashboard() {
+function AgencyDashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -729,5 +729,20 @@ export default function AgencyDashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AgencyDashboard() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <AgencyDashboardContent />
+    </Suspense>
   );
 }

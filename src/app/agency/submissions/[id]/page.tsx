@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -72,7 +72,7 @@ interface SubmissionDetails {
   }>;
 }
 
-export default function SubmissionDetailsPage() {
+function SubmissionDetailsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
@@ -639,5 +639,20 @@ export default function SubmissionDetailsPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function SubmissionDetailsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SubmissionDetailsContent />
+    </Suspense>
   );
 }
