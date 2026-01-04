@@ -285,7 +285,11 @@ function SubmitFormContent() {
       }, 2000);
     } catch (err: any) {
       console.error("Submission error:", err);
-      setError(err.message || "Failed to submit application. Please try again.");
+      const errorMessage = err.message || result?.error || "Failed to submit application. Please try again.";
+      setError(errorMessage);
+      toast.error(errorMessage, {
+        description: "Please check all required fields and try again.",
+      });
       setSubmitting(false);
     }
   };

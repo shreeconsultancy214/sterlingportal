@@ -270,9 +270,10 @@ export default function AgencyBoundPoliciesPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       {policy.finalPolicyDocuments.finalBinderPdfUrl && (
                         <a
-                          href={`/api/documents/download?path=${encodeURIComponent(policy.finalPolicyDocuments.finalBinderPdfUrl)}`}
+                          href={policy.finalPolicyDocuments.finalBinderPdfUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          download
                           className="flex items-center gap-2 px-4 py-2.5 bg-[#00BCD4] text-white rounded-lg hover:bg-[#00ACC1] transition-colors text-sm font-semibold"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -283,9 +284,10 @@ export default function AgencyBoundPoliciesPage() {
                       )}
                       {policy.finalPolicyDocuments.finalPolicyPdfUrl && (
                         <a
-                          href={`/api/documents/download?path=${encodeURIComponent(policy.finalPolicyDocuments.finalPolicyPdfUrl)}`}
+                          href={policy.finalPolicyDocuments.finalPolicyPdfUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          download
                           className="flex items-center gap-2 px-4 py-2.5 bg-[#00BCD4] text-white rounded-lg hover:bg-[#00ACC1] transition-colors text-sm font-semibold"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

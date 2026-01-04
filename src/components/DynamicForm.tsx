@@ -90,8 +90,12 @@ export default function DynamicForm({
   };
 
   const handleFormSubmit = (data: Record<string, any>) => {
-    const allFiles = Object.values(fileInputs).find((files) => files && files.length > 0) || null;
-    onSubmit(data, allFiles);
+    try {
+      const allFiles = Object.values(fileInputs).find((files) => files && files.length > 0) || null;
+      onSubmit(data, allFiles);
+    } catch (error) {
+      console.error("Form submission error:", error);
+    }
   };
 
   const handleFileChange = (fieldKey: string, files: FileList | null) => {

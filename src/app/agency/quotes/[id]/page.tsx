@@ -921,9 +921,10 @@ export default function QuoteDetailsPage() {
             <div className="space-y-2">
               {quote.binderPdfUrl && (
               <a
-                href={`/api/documents/download?path=${encodeURIComponent(quote.binderPdfUrl)}`}
+                href={quote.binderPdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                download
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#00BCD4] text-white rounded-lg text-sm font-semibold hover:bg-[#00ACC1] transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1154,9 +1155,10 @@ export default function QuoteDetailsPage() {
                     <div className="space-y-2">
                       {submission.finalPolicyDocuments.finalBinderPdfUrl && (
                         <a
-                          href={`/api/documents/download?path=${encodeURIComponent(submission.finalPolicyDocuments.finalBinderPdfUrl)}`}
+                          href={submission.finalPolicyDocuments.finalBinderPdfUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          download
                           className="block px-4 py-2 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium text-blue-700"
                         >
                           📄 Download Final Binder PDF
@@ -1164,9 +1166,10 @@ export default function QuoteDetailsPage() {
                       )}
                       {submission.finalPolicyDocuments.finalPolicyPdfUrl && (
                         <a
-                          href={`/api/documents/download?path=${encodeURIComponent(submission.finalPolicyDocuments.finalPolicyPdfUrl)}`}
+                          href={submission.finalPolicyDocuments.finalPolicyPdfUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          download
                           className="block px-4 py-2 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium text-blue-700"
                         >
                           📄 Download Final Policy PDF
@@ -1174,9 +1177,10 @@ export default function QuoteDetailsPage() {
                       )}
                       {submission.finalPolicyDocuments.certificateOfInsuranceUrl && (
                         <a
-                          href={`/api/documents/download?path=${encodeURIComponent(submission.finalPolicyDocuments.certificateOfInsuranceUrl)}`}
+                          href={submission.finalPolicyDocuments.certificateOfInsuranceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          download
                           className="block px-4 py-2 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium text-blue-700"
                         >
                           📄 Download Certificate of Insurance
