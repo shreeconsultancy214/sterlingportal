@@ -156,3 +156,5 @@ Then add:
 
 **That's it! Once you add NEXTAUTH_URL and redeploy, NextAuth will work correctly.** 🎉
 
+
+

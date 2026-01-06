@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { toast } from "sonner";
+import { getStateCode } from "@/lib/utils/stateConverter";
+import { useAutoSave } from "@/hooks/useAutoSave";
+import SaveStatusIndicator from "@/components/forms/SaveStatusIndicator";
 
 interface Carrier {
   _id: string;
@@ -51,6 +54,7 @@ export default function AdminQuotePage() {
   const [fireLegalLimit, setFireLegalLimit] = useState("");
   const [medicalExpenseLimit, setMedicalExpenseLimit] = useState("");
   const [deductible, setDeductible] = useState("");
+  const [excessLimit, setExcessLimit] = useState(""); // New: Excess limits
   
   // Endorsements (will be auto-populated from application form)
   const [selectedEndorsements, setSelectedEndorsements] = useState<string[]>([]);
@@ -61,9 +65,13 @@ export default function AdminQuotePage() {
   // Dates and other
   const [effectiveDate, setEffectiveDate] = useState("");
   const [expirationDate, setExpirationDate] = useState("");
+  const [policyDuration, setPolicyDuration] = useState<"6months" | "1year" | "">(""); // New: Duration selection
   const [policyNumber, setPolicyNumber] = useState("");
   const [carrierReference, setCarrierReference] = useState("");
   const [specialNotes, setSpecialNotes] = useState("");
+  
+  // Tax calculator
+  const [calculatingTax, setCalculatingTax] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -193,7 +201,53 @@ export default function AdminQuotePage() {
 
   const selectedCarrier = carriers.find((c) => c._id === selectedCarrierId);
 
-  // Calculate tax amount when tax percent changes
+  // Auto-calculate tax when carrier quote or state changes (Change 1: Tax Calculator API)
+  useEffect(() => {
+    const calculateTax = async () => {
+      if (!carrierQuoteUSD || !submission) return;
+      
+      const carrierQuote = parseFloat(carrierQuoteUSD);
+      if (isNaN(carrierQuote) || carrierQuote <= 0) {
+        setPremiumTaxAmountUSD("");
+        setPremiumTaxPercent("");
+        return;
+      }
+
+      // Get state from submission and convert to state code
+      const stateRaw = (submission as any).state || (submission as any).clientContact?.businessAddress?.state || "CA";
+      
+      // Convert state name to code (e.g., "California" → "CA")
+      const state = getStateCode(stateRaw);
+      
+      // Debug logging
+      console.log(`[Quote Page] Calculating tax for state: "${stateRaw}" → "${state}", premium: $${carrierQuote}`);
+      
+      setCalculatingTax(true);
+      try {
+        const response = await fetch(`/api/tax/calculate?state=${state}&premium=${carrierQuote}`);
+        const data = await response.json();
+        
+        console.log(`[Quote Page] Tax API response:`, data);
+        
+        if (data.success && data.taxRate && data.taxAmount) {
+          setPremiumTaxPercent(data.taxRate.toFixed(2));
+          setPremiumTaxAmountUSD(data.taxAmount.toFixed(2));
+        } else {
+          // Fallback to manual entry if API fails
+          console.warn("Tax calculator API failed, using manual entry");
+        }
+      } catch (error) {
+        console.error("Error calculating tax:", error);
+        // Allow manual entry if API fails
+      } finally {
+        setCalculatingTax(false);
+      }
+    };
+
+    calculateTax();
+  }, [carrierQuoteUSD, submission]);
+
+  // Calculate tax amount when tax percent is manually changed
   useEffect(() => {
     if (carrierQuoteUSD && premiumTaxPercent) {
       const carrierQuote = parseFloat(carrierQuoteUSD);
@@ -204,10 +258,26 @@ export default function AdminQuotePage() {
       } else {
         setPremiumTaxAmountUSD("");
       }
-    } else {
-      setPremiumTaxAmountUSD("");
     }
-  }, [carrierQuoteUSD, premiumTaxPercent]);
+  }, [premiumTaxPercent]);
+
+  // Auto-calculate expiration date when effective date or duration changes (Change 5: Duration Tabs)
+  useEffect(() => {
+    if (effectiveDate && policyDuration) {
+      const effective = new Date(effectiveDate);
+      const expiration = new Date(effective);
+      
+      if (policyDuration === "6months") {
+        expiration.setMonth(expiration.getMonth() + 6);
+      } else if (policyDuration === "1year") {
+        expiration.setFullYear(expiration.getFullYear() + 1);
+      }
+      
+      // Format as YYYY-MM-DD for date input
+      const expirationStr = expiration.toISOString().split('T')[0];
+      setExpirationDate(expirationStr);
+    }
+  }, [effectiveDate, policyDuration]);
 
   const calculateBreakdown = () => {
     if (!carrierQuoteUSD || !selectedCarrier) return null;
@@ -232,6 +302,128 @@ export default function AdminQuotePage() {
   };
 
   const breakdown = calculateBreakdown();
+
+  // Collect all form data for auto-save
+  const formData = useMemo(() => ({
+    selectedCarrierId,
+    carrierQuoteUSD,
+    premiumTaxPercent,
+    premiumTaxAmountUSD,
+    policyFeeUSD,
+    generalLiabilityLimit,
+    aggregateLimit,
+    fireLegalLimit,
+    medicalExpenseLimit,
+    deductible,
+    excessLimit,
+    selectedEndorsements,
+    effectiveDate,
+    expirationDate,
+    policyDuration,
+    policyNumber,
+    carrierReference,
+    specialNotes,
+  }), [
+    selectedCarrierId,
+    carrierQuoteUSD,
+    premiumTaxPercent,
+    premiumTaxAmountUSD,
+    policyFeeUSD,
+    generalLiabilityLimit,
+    aggregateLimit,
+    fireLegalLimit,
+    medicalExpenseLimit,
+    deductible,
+    excessLimit,
+    selectedEndorsements,
+    effectiveDate,
+    expirationDate,
+    policyDuration,
+    policyNumber,
+    carrierReference,
+    specialNotes,
+  ]);
+
+  // Auto-save hook
+  const { saveStatus, loadDraft, deleteDraft } = useAutoSave({
+    formType: "admin_quote",
+    formId: submissionId || "",
+    data: formData,
+    enabled: !!submissionId && status === "authenticated",
+  });
+
+  // Load draft on mount (after submission data is loaded)
+  useEffect(() => {
+    if (status === "authenticated" && submissionId && !loading && submission) {
+      console.log("[AdminQuote] Loading draft for submission:", submissionId);
+      loadDraft().then((draftData) => {
+        console.log("[AdminQuote] Draft loaded, data:", draftData);
+        if (draftData) {
+          console.log("[AdminQuote] Restoring form fields from draft...");
+          // Restore form fields from draft (draft overrides submission defaults)
+          if (draftData.selectedCarrierId !== undefined && draftData.selectedCarrierId !== null && draftData.selectedCarrierId !== "") {
+            setSelectedCarrierId(String(draftData.selectedCarrierId));
+          }
+          if (draftData.carrierQuoteUSD !== undefined && draftData.carrierQuoteUSD !== null && draftData.carrierQuoteUSD !== "") {
+            setCarrierQuoteUSD(String(draftData.carrierQuoteUSD));
+          }
+          if (draftData.premiumTaxPercent !== undefined && draftData.premiumTaxPercent !== null && draftData.premiumTaxPercent !== "") {
+            setPremiumTaxPercent(String(draftData.premiumTaxPercent));
+          }
+          if (draftData.premiumTaxAmountUSD !== undefined && draftData.premiumTaxAmountUSD !== null && draftData.premiumTaxAmountUSD !== "") {
+            setPremiumTaxAmountUSD(String(draftData.premiumTaxAmountUSD));
+          }
+          if (draftData.policyFeeUSD !== undefined && draftData.policyFeeUSD !== null && draftData.policyFeeUSD !== "") {
+            setPolicyFeeUSD(String(draftData.policyFeeUSD));
+          }
+          if (draftData.generalLiabilityLimit !== undefined && draftData.generalLiabilityLimit !== null && draftData.generalLiabilityLimit !== "") {
+            setGeneralLiabilityLimit(String(draftData.generalLiabilityLimit));
+          }
+          if (draftData.aggregateLimit !== undefined && draftData.aggregateLimit !== null && draftData.aggregateLimit !== "") {
+            setAggregateLimit(String(draftData.aggregateLimit));
+          }
+          if (draftData.fireLegalLimit !== undefined && draftData.fireLegalLimit !== null && draftData.fireLegalLimit !== "") {
+            setFireLegalLimit(String(draftData.fireLegalLimit));
+          }
+          if (draftData.medicalExpenseLimit !== undefined && draftData.medicalExpenseLimit !== null && draftData.medicalExpenseLimit !== "") {
+            setMedicalExpenseLimit(String(draftData.medicalExpenseLimit));
+          }
+          if (draftData.deductible !== undefined && draftData.deductible !== null && draftData.deductible !== "") {
+            setDeductible(String(draftData.deductible));
+          }
+          if (draftData.excessLimit !== undefined && draftData.excessLimit !== null && draftData.excessLimit !== "") {
+            setExcessLimit(String(draftData.excessLimit));
+          }
+          if (draftData.selectedEndorsements !== undefined && Array.isArray(draftData.selectedEndorsements)) {
+            setSelectedEndorsements(draftData.selectedEndorsements);
+          }
+          if (draftData.effectiveDate !== undefined && draftData.effectiveDate !== null && draftData.effectiveDate !== "") {
+            setEffectiveDate(String(draftData.effectiveDate));
+          }
+          if (draftData.expirationDate !== undefined && draftData.expirationDate !== null && draftData.expirationDate !== "") {
+            setExpirationDate(String(draftData.expirationDate));
+          }
+          if (draftData.policyDuration !== undefined && draftData.policyDuration !== null && draftData.policyDuration !== "") {
+            setPolicyDuration(draftData.policyDuration as "6months" | "1year");
+          }
+          if (draftData.policyNumber !== undefined && draftData.policyNumber !== null && draftData.policyNumber !== "") {
+            setPolicyNumber(String(draftData.policyNumber));
+          }
+          if (draftData.carrierReference !== undefined && draftData.carrierReference !== null && draftData.carrierReference !== "") {
+            setCarrierReference(String(draftData.carrierReference));
+          }
+          if (draftData.specialNotes !== undefined && draftData.specialNotes !== null && draftData.specialNotes !== "") {
+            setSpecialNotes(String(draftData.specialNotes));
+          }
+          console.log("[AdminQuote] Form fields restored from draft!");
+        } else {
+          console.log("[AdminQuote] No draft data found, using defaults");
+        }
+      }).catch((error) => {
+        console.error("[AdminQuote] Error loading draft:", error);
+      });
+    }
+  }, [status, submissionId, loading, submission, loadDraft]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,6 +451,7 @@ export default function AdminQuotePage() {
         fireLegalLimit: fireLegalLimit || undefined,
         medicalExpenseLimit: medicalExpenseLimit || undefined,
         deductible: deductible || undefined,
+        excessLimit: excessLimit || undefined,
       };
 
       // Note: The API uses [id] as the dynamic segment, which represents submissionId
@@ -275,6 +468,7 @@ export default function AdminQuotePage() {
           policyFeeUSD: policyFeeUSD || undefined,
           brokerFeeAmountUSD: brokerFeeFromForm || undefined,
           limits: Object.keys(limits).some(k => limits[k as keyof typeof limits]) ? limits : undefined,
+          excessLimit: excessLimit || undefined,
           endorsements: selectedEndorsements.length > 0 ? selectedEndorsements : undefined,
           effectiveDate: effectiveDate || undefined,
           expirationDate: expirationDate || undefined,
@@ -289,6 +483,9 @@ export default function AdminQuotePage() {
       if (!response.ok) {
         throw new Error(data.error || "Failed to create quote");
       }
+
+      // Delete draft after successful submission
+      await deleteDraft();
 
       setSuccess(true);
       toast.success("Quote created successfully! Redirecting...");
@@ -498,6 +695,10 @@ export default function AdminQuotePage() {
             </div>
           </div>
 
+          <div className="mb-6 flex justify-end">
+            <SaveStatusIndicator status={saveStatus} />
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* Carrier Selection */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200/60">
@@ -575,10 +776,26 @@ export default function AdminQuotePage() {
               </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Premium Tax */}
+                {/* Premium Tax - Auto-calculated from API */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  <label className="block text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
                     Premium Tax (%)
+                    {calculatingTax && (
+                      <span className="text-xs text-blue-600 flex items-center gap-1">
+                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Calculating...
+                      </span>
+                    )}
+                    {!calculatingTax && premiumTaxPercent && (
+                      <span className="text-xs text-green-600 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Auto-calculated
+                      </span>
+                    )}
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -589,10 +806,15 @@ export default function AdminQuotePage() {
                       value={premiumTaxPercent}
                       onChange={(e) => setPremiumTaxPercent(e.target.value)}
                       className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 transition-all hover:border-gray-300 !text-gray-900"
-                      placeholder="0.00"
+                      placeholder="Auto-calculated"
                     />
                     <span className="text-gray-600 font-semibold self-center px-3">%</span>
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {submission && (submission as any).state 
+                      ? `Tax rate for ${(submission as any).state || (submission as any).clientContact?.businessAddress?.state || 'state'} (auto-calculated)`
+                      : "Tax will be calculated automatically when premium is entered"}
+                  </p>
                 </div>
                 
                 <div>
@@ -672,17 +894,21 @@ export default function AdminQuotePage() {
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Change 2: General Liability Limit - Dropdown */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     General Liability Limit <span className="text-xs text-gray-500 font-normal">(from application)</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={generalLiabilityLimit}
                     onChange={(e) => setGeneralLiabilityLimit(e.target.value)}
                     className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all hover:border-gray-300 !text-gray-900"
-                    placeholder="e.g., 1M / 1M / 1M"
-                  />
+                  >
+                    <option value="">-- Select Limit --</option>
+                    <option value="1/1/1">1/1/1</option>
+                    <option value="1/2/1">1/2/1</option>
+                    <option value="1/2/2">1/2/2</option>
+                  </select>
                 </div>
 
                 <div>
@@ -698,52 +924,73 @@ export default function AdminQuotePage() {
                   />
                 </div>
 
+                {/* Change 4: Fire Legal Limit - Dropdown */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Fire Legal Limit <span className="text-xs text-gray-500 font-normal">(from application)</span>
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold">$</span>
-                    <input
-                      type="text"
-                      value={fireLegalLimit}
-                      onChange={(e) => setFireLegalLimit(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all hover:border-gray-300 !text-gray-900"
-                      placeholder="e.g., 100,000"
-                    />
-                  </div>
+                  <select
+                    value={fireLegalLimit}
+                    onChange={(e) => setFireLegalLimit(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all hover:border-gray-300 !text-gray-900"
+                  >
+                    <option value="">-- Select Fire Legal Limit --</option>
+                    <option value="100000">$100,000</option>
+                    <option value="300000">$300,000</option>
+                  </select>
                 </div>
 
+                {/* Change 4: Medical Expense Limit - Dropdown */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Medical Expense Limit <span className="text-xs text-gray-500 font-normal">(from application)</span>
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold">$</span>
-                    <input
-                      type="text"
-                      value={medicalExpenseLimit}
-                      onChange={(e) => setMedicalExpenseLimit(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all hover:border-gray-300 !text-gray-900"
-                      placeholder="e.g., 5,000"
-                    />
-                  </div>
+                  <select
+                    value={medicalExpenseLimit}
+                    onChange={(e) => setMedicalExpenseLimit(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all hover:border-gray-300 !text-gray-900"
+                  >
+                    <option value="">-- Select Medical Expense Limit --</option>
+                    <option value="5000">$5,000</option>
+                    <option value="10000">$10,000</option>
+                  </select>
                 </div>
 
+                {/* Change 4: Deductible - Dropdown */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Deductible
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold">$</span>
-                    <input
-                      type="text"
-                      value={deductible}
-                      onChange={(e) => setDeductible(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all hover:border-gray-300 !text-gray-900"
-                      placeholder="e.g., 2,500"
-                    />
-                  </div>
+                  <select
+                    value={deductible}
+                    onChange={(e) => setDeductible(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all hover:border-gray-300 !text-gray-900"
+                  >
+                    <option value="">-- Select Deductible --</option>
+                    <option value="10000">$10,000</option>
+                    <option value="5000">$5,000</option>
+                    <option value="2500">$2,500</option>
+                    <option value="1000">$1,000</option>
+                  </select>
+                </div>
+
+                {/* Change 3: Excess Limits - New Field */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Excess Limits <span className="text-xs text-gray-500 font-normal">(if needed)</span>
+                  </label>
+                  <select
+                    value={excessLimit}
+                    onChange={(e) => setExcessLimit(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all hover:border-gray-300 !text-gray-900"
+                  >
+                    <option value="">-- Select Excess Limit (Optional) --</option>
+                    <option value="1M">1M</option>
+                    <option value="2M">2M</option>
+                    <option value="3M">3M</option>
+                    <option value="4M">4M</option>
+                    <option value="5M">5M</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -794,6 +1041,7 @@ export default function AdminQuotePage() {
               </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Change 5: Effective Date with Duration Tabs */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Effective Date
@@ -804,18 +1052,55 @@ export default function AdminQuotePage() {
                     onChange={(e) => setEffectiveDate(e.target.value)}
                     className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 transition-all hover:border-gray-300 !text-gray-900"
                   />
+                  
+                  {/* Duration Tabs - Show when effective date is selected */}
+                  {effectiveDate && (
+                    <div className="mt-3">
+                      <label className="block text-xs font-semibold text-gray-700 mb-2">
+                        Policy Duration
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPolicyDuration("6months")}
+                          className={`flex-1 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                            policyDuration === "6months"
+                              ? "bg-teal-600 text-white shadow-lg scale-105"
+                              : "bg-white border-2 border-gray-300 text-gray-700 hover:border-teal-400 hover:bg-teal-50"
+                          }`}
+                        >
+                          6 Months
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPolicyDuration("1year")}
+                          className={`flex-1 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                            policyDuration === "1year"
+                              ? "bg-teal-600 text-white shadow-lg scale-105"
+                              : "bg-white border-2 border-gray-300 text-gray-700 hover:border-teal-400 hover:bg-teal-50"
+                          }`}
+                        >
+                          1 Year
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
-                    Expiration Date
+                    Expiration Date <span className="text-xs text-gray-500 font-normal">(auto-calculated)</span>
                   </label>
                   <input
                     type="date"
                     value={expirationDate}
-                    onChange={(e) => setExpirationDate(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-semibold focus:outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 transition-all hover:border-gray-300 !text-gray-900"
+                    readOnly
+                    className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-gray-900 font-semibold !text-gray-900"
+                    placeholder="Select effective date and duration"
                   />
+                  {!effectiveDate && (
+                    <p className="text-xs text-gray-500 mt-1">Select effective date to calculate expiration</p>
+                  )}
                 </div>
 
                 <div>

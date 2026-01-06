@@ -111,3 +111,5 @@ EXAMPLE_NAME (delete this)
 - **MONGODB_URI**: Make sure MongoDB Atlas allows connections from Vercel IPs (should be `0.0.0.0/0`)
 - **Secrets**: Never commit these to Git (you haven't, which is good!)
 
+
+

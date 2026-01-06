@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useGooglePlacesAutocomplete } from "@/hooks/useGooglePlacesAutocomplete";
 
@@ -139,7 +139,7 @@ export default function QuoteFormPage() {
     email: "",
     website: "",
     carrierDescriptionOk: false,
-    carrierApprovedDescription: "- Constructs, maintains, services and repairs of refrigerators, refrigerated rooms, air-conditioning units, ducts, blowers, humidity and thermostatic controls.",
+    carrierApprovedDescription: "",
     
     // Address
     streetAddress: "",
@@ -212,6 +212,16 @@ export default function QuoteFormPage() {
     addExcessLiability: false,
   });
 
+  // Ensure class codes/description start blank on every mount to avoid stale values
+  useEffect(() => {
+    console.log("[Init] Resetting class codes and carrier description to blank");
+    setFormData((prev: any) => ({
+      ...prev,
+      classCodeWork: {},
+      carrierApprovedDescription: ""
+    }));
+  }, []);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
   const [calculatedPremium, setCalculatedPremium] = useState<number | null>(null);
@@ -254,26 +264,108 @@ export default function QuoteFormPage() {
 
   const completionPercentage = calculateCompletionPercentage();
 
+  // Auto-save hook
+  // Auto-save temporarily disabled per request
+
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
     triggerAnimation();
   };
 
-  const handleClassCodeChange = (code: string, percentage: string) => {
-    const newPercentage = parseFloat(percentage) || 0;
-    const currentTotal = Object.entries(formData.classCodeWork)
-      .filter(([c]) => c !== code)
-      .reduce((sum, [, val]) => sum + (parseFloat(val as string) || 0), 0);
-    
-    // Don't allow total to exceed 100%
-    if (currentTotal + newPercentage <= 100) {
-      setFormData((prev: any) => ({
-        ...prev,
-        classCodeWork: { ...prev.classCodeWork, [code]: percentage }
-      }));
-      triggerAnimation();
-    }
+  // Class Code to Carrier Description Mapping (from ISC)
+  const classCodeDescriptionMap: Record<string, string> = {
+    "A/C & Refrigeration": "- Constructs, maintains, services and repairs of refrigerators, refrigerated rooms, air-conditioning units, ducts, blowers, humidity and thermostatic controls.",
+    "Carpentry (Framing)": "- Form work, framing or rough carpentry necessary to construct framed structures as well as Interior/exterior staircases.",
+    "Carpentry (Interior/Woodwork/Shop)": "- Fabricate and install cabinets, interior trim work, non-bearing partitions and other items of \"finish carpentry.\"",
+    "Concrete (Flat)": "- Patios, driveways, sidewalks, minor parking lot repair/patching, no pouring of commercial parking lots.",
+    "Door/Window Installation": "- Install doors and windows including screens.",
+    "Drywall": "- Installs gypsum wall board including nonstructural metal framing members, taping and texturing. Drop ceiling and acoustical ceiling install and repair.",
+    "Electrical": "- Installs and connects electrical wires and fixtures solar. systems, security alarms and CCTV (no monitoring)",
+    "Fencing": "- Constructs, erects, alters or repairs all types of fences (no pool fencing permitted).",
+    "Floor Covering Installation": "- Prepares any surface for the installation of flooring and installs carpet, tile, wood, floors and flooring including the finishing and repairing of floors.",
+    "Garage Door Installation": "- Installation and repair of garage doors.",
+    "General Contractor (New Commercial)": "- Construction of new commercial buildings or structures.",
+    "General Contractor (New Residential)": "- Construction of new homes.",
+    "General Contractor (Remodel Commercial)": "- Repair and remodel of commercial buildings.",
+    "General Contractor (Remodel Residential)": "- Repair/remodel/additions to residential structures.",
+    "Glass Installation/Glazing": "- Cuts, assembles and/or installs all kinds of glass, glass work, mirrored glass (No Automobile exposure).",
+    "HVAC": "- Installation of heating, ventilation, or air conditioning systems.",
+    "Insulation": "- Installation or application of acoustical or thermal insulating material in buildings or within building walls.",
+    "Janitorial (Residential - No Floor Waxing)": "- Cleaning services for residential buildings, excluding floor waxing and pressure washing.",
+    "Landscape": "- Lawn care, removal of leaves, laying out grounds, planting trees, shrubs, flowers or lawns. Outdoor yard sprinkler install/repair. Tree trimming from the ground only. No stump grinding.",
+    "Masonry": "- Install concrete cinder blocks, clay baked bricks w/ mortar, Small retaining walls (up to 5 feet), patio pavers, & rocks on walls. No chimney exposure.",
+    "Metal Erection (Decorative)": "- Iron fence, decorative metal on doors & windows, gates & other non-load bearing metal application. (no welding)",
+    "Painting (Exterior)": "- Exterior prepping and painting with standard materials to the industry, staining & oil-based paint. No stand-alone waterproofing applications or painting of roofs.",
+    "Painting (Interior)": "- Interior prepping and painting with standard material to the industry, staining and oil-based paint.",
+    "Plastering/Stucco": "- Outside prep such as removal of old siding, building wrap (waterproofing) to install new stucco. Inside prep will include sanding, scraping, masking, taping and plastering. Soundproofing and fireproofing OK.",
+    "Plumbing (Commercial)": "- Installation of copper pipes, fitting, valves, sinks, toilets, tubs, showers, water heaters, LPG work for commercial buildings. No fire suppression or boiler operations.",
+    "Plumbing (Residential)": "- Installation of copper pipes, fitting, valves, sinks, toilets, tubs, showers, water heaters, LPG work for Residential buildings. No fire suppression or boiler operations.",
+    "Roofing (New Commercial)": "- The process of constructing a roof on a new commercial structure.",
+    "Roofing (New Residential)": "- The process of constructing a roof on a new residential structure.",
+    "Roofing (Repair Commercial)": "- The process of constructing, repairing or remodeling a roof on an existing commercial structure.",
+    "Roofing (Repair Residential)": "- The process of repairing or remodeling a roof on an existing residential structure.",
+    "Sheet Metal": "- Cuts, shapes, fabricates and installs sheet metal such as cornices, flashings, gutters, leaders, pans, kitchen equipment and duct work. No roofing exposure.",
+    "Siding and Decking": "- Applies or installs all types of exterior siding including wood, wood products, vinyl, aluminum and metal siding to new or existing buildings. Also constructs wooden decks and related handrails. No rooftop decking.",
+    "Swimming Pool Cleaning": "- Cleaning and routine maintenance of swimming pools, hot tubs, spas such as cleaning filters, vacuuming and maintaining proper pH level. Routine heater and pump maintenance. No install.",
+    "Swimming Pool Installation": "- Constructs, remodels or repairs swimming pools, spas or hot tubs, including installation of solar heating equipment.",
+    "Tile & Marble Installation": "- Installation of tile, marble, granite, travertine or other related materials. Flooring and countertops are acceptable.",
+    "Welding (Non-Structural)": "- Non-Structural welding. No stairs, handrails, trailers, autos, boats, boilers, conveyors, production/manufacturing/industrial facilities, pressurized pipes, oil/gas related, or anything deemed structural.",
   };
+
+  // Derive the description based solely on the selected class code.
+  const effectiveDescription = useMemo(() => {
+    const classCodes = Object.keys(formData.classCodeWork || {});
+    if (classCodes.length === 0) return "";
+    const firstClassCode = classCodes[0];
+    return classCodeDescriptionMap[firstClassCode] || "";
+  }, [formData.classCodeWork]);
+
+  const handleClassCodeChange = (code: string, percentage: string) => {
+    // Only allow ONE class code at a time - replace previous if exists
+    const newClassCodeWork: Record<string, string> = {
+      [code]: percentage
+    };
+    
+    // Get carrier description for the selected class code
+    const description = classCodeDescriptionMap[code] || "";
+    
+    // Debug logging
+    console.log("[Class Code Change] Code:", code);
+    console.log("[Class Code Change] Description found:", description ? "Yes" : "No");
+    console.log("[Class Code Change] Description:", description);
+    console.log("[Class Code Change] Available keys:", Object.keys(classCodeDescriptionMap).slice(0, 5));
+    
+    // Force update description immediately
+    setFormData((prev: any) => ({
+      ...prev,
+      classCodeWork: newClassCodeWork,
+      carrierApprovedDescription: description
+    }));
+    triggerAnimation();
+  };
+
+  // Watch for class code changes and update description
+  useEffect(() => {
+    const classCodes = Object.keys(formData.classCodeWork || {});
+    if (classCodes.length > 0) {
+      const firstClassCode = classCodes[0];
+      const description = classCodeDescriptionMap[firstClassCode] || "";
+      if (description && formData.carrierApprovedDescription !== description) {
+        setFormData((prev: any) => ({
+          ...prev,
+          carrierApprovedDescription: description
+        }));
+      }
+    } else {
+      // No class code selected - clear description
+      if (formData.carrierApprovedDescription) {
+        setFormData((prev: any) => ({
+          ...prev,
+          carrierApprovedDescription: ""
+        }));
+      }
+    }
+  }, [formData.classCodeWork, formData.carrierApprovedDescription]);
 
   const calculateTotalClassCodePercent = (): number => {
     const values = Object.values(formData.classCodeWork || {}) as (string | number)[];
@@ -807,17 +899,22 @@ export default function QuoteFormPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-[#00BCD4] bg-white"
                 onChange={(e) => {
                   const selectedCode = e.target.value;
-                  if (selectedCode && !formData.classCodeWork[selectedCode]) {
-                    const remaining = getRemainingClassCodePercent();
-                    if (remaining > 0) {
-                      handleClassCodeChange(selectedCode, remaining.toString());
-                    }
+                  if (selectedCode) {
+                    // Only allow ONE class code at a time - set to 100%
+                    handleClassCodeChange(selectedCode, "100");
+                  } else {
+                    // "Select Class Code" option chosen - clear everything
+                    console.log("[Select Change] Clearing class code and description");
+                    setFormData((prev: any) => ({
+                      ...prev,
+                      classCodeWork: {},
+                      carrierApprovedDescription: ""
+                    }));
                   }
                 }}
-                disabled={getRemainingClassCodePercent() === 0}
               >
                 <option value="">Select Class Code</option>
-                {classCodeOptions.filter(code => !formData.classCodeWork[code]).map((code) => (
+                {classCodeOptions.map((code) => (
                   <option key={code} value={code}>{code}</option>
                 ))}
               </select>
@@ -836,19 +933,19 @@ export default function QuoteFormPage() {
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        value={percentage as string}
-                        onChange={(e) => handleClassCodeChange(code, e.target.value)}
-                        className="w-20 px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-[#00BCD4] text-sm text-center"
-                        min="0"
+                        value="100"
+                        readOnly
+                        className="w-20 px-2 py-1 border border-gray-300 rounded bg-gray-50 text-sm text-center text-gray-600"
+                        min="100"
                         max="100"
                       />
                       <span className="text-sm text-gray-500">%</span>
                       <button
                         type="button"
                         onClick={() => {
-                          const newClassCodes = { ...formData.classCodeWork };
-                          delete newClassCodes[code];
-                          handleInputChange('classCodeWork', newClassCodes);
+                          // Clear class code and reset description to empty
+                          handleInputChange('classCodeWork', {});
+                          handleInputChange('carrierApprovedDescription', "");
                         }}
                         className="text-red-500 hover:text-red-700 text-sm font-semibold"
                       >
@@ -1443,8 +1540,20 @@ export default function QuoteFormPage() {
                 <label className="text-sm font-medium text-gray-900 pt-2">Carrier Approved Description</label>
                 <div></div>
                 <textarea
-                  value={formData.carrierApprovedDescription}
-                  onChange={(e) => handleInputChange('carrierApprovedDescription', e.target.value)}
+                  value={effectiveDescription}
+                  onChange={(e) => {
+                    const hasClassCode = Object.keys(formData.classCodeWork || {}).length > 0;
+                    if (!hasClassCode) {
+                      // If no class code, force clear to avoid stale values
+                      setFormData((prev: any) => ({
+                        ...prev,
+                        carrierApprovedDescription: ""
+                      }));
+                      return;
+                    }
+                    // Allow manual editing when a class code exists (still recalculated on load)
+                    handleInputChange('carrierApprovedDescription', e.target.value);
+                  }}
                   rows={4}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded focus:ring-1 focus:ring-[#00BCD4] text-sm"
                   placeholder="Describe operations for which you are currently applying for insurance"

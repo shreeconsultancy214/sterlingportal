@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useMemo } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -38,6 +38,7 @@ function SubmitFormContent() {
   const [isCAOperations, setIsCAOperations] = useState(false);
   const [selectedCarrierId, setSelectedCarrierId] = useState("");
   const [carriers, setCarriers] = useState<any[]>([]);
+  const [dynamicFormData, setDynamicFormData] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -635,7 +636,8 @@ function SubmitFormContent() {
               fields={template.fields} 
               onSubmit={handleFormSubmit} 
               isLoading={submitting}
-              initialValues={isEditMode && existingSubmission?.payload ? existingSubmission.payload : undefined}
+              initialValues={isEditMode && existingSubmission?.payload ? existingSubmission.payload : dynamicFormData || undefined}
+              onDataChange={setDynamicFormData}
             />
           </div>
         )}

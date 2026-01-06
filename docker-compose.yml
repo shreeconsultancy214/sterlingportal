@@ -19,3 +19,5 @@ services:
       - ./public/uploads:/app/public/uploads
       - ./public/documents:/app/public/documents
 
+
+

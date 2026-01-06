@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { IFormField } from "@/models/FormTemplate";
 
 interface DynamicFormProps {
@@ -11,6 +11,7 @@ interface DynamicFormProps {
   initialValues?: Record<string, any>;
   onSubmit: (data: Record<string, any>, files: FileList | null) => void;
   isLoading?: boolean;
+  onDataChange?: (data: Record<string, any>) => void; // Callback for auto-save
 }
 
 export default function DynamicForm({
@@ -18,6 +19,7 @@ export default function DynamicForm({
   initialValues,
   onSubmit,
   isLoading = false,
+  onDataChange,
 }: DynamicFormProps) {
   const [fileInputs, setFileInputs] = useState<Record<string, FileList | null>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
@@ -81,6 +83,13 @@ export default function DynamicForm({
   });
 
   const watchedValues = watch();
+
+  // Notify parent component of form data changes (for auto-save)
+  useEffect(() => {
+    if (onDataChange) {
+      onDataChange(watchedValues);
+    }
+  }, [watchedValues, onDataChange]);
 
   const isFieldVisible = (field: IFormField): boolean => {
     if (!field.conditional) return true;
