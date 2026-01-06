@@ -101,16 +101,17 @@ export default function AgencyQuotesPage() {
     }
   }, []);
 
-  const fetchQuotes = async () => {
+  const fetchQuotes = async (statusFilter?: string) => {
     setLoading(true);
     setError("");
     try {
       const params = new URLSearchParams();
-      if (filterStatus !== "ALL") {
-        params.append("status", filterStatus);
+      const currentFilter = statusFilter || filterStatus;
+      if (currentFilter !== "ALL") {
+        params.append("status", currentFilter);
       }
       
-      console.log("📡 Fetching quotes with filter:", filterStatus);
+      console.log("📡 Fetching quotes with filter:", currentFilter);
       const response = await fetch(`/api/agency/quotes?${params.toString()}`);
       
       if (!response.ok) {
@@ -218,13 +219,21 @@ export default function AgencyQuotesPage() {
         throw new Error(data.error || "Failed to approve quote");
       }
 
-      // If we're viewing posted quotes, redirect to approved quotes
+      // If we're viewing posted quotes, switch to approved quotes view
       if (filterStatus === "POSTED") {
-        router.push("/agency/quotes?status=APPROVED");
+        // Update filter status
+        setFilterStatus("APPROVED");
+        // Update URL without full page reload
+        router.replace("/agency/quotes?status=APPROVED", { scroll: false });
+        // Fetch quotes with new filter immediately (before useEffect triggers)
+        await fetchQuotes("APPROVED");
       } else {
-        // Refresh quotes
+        // Refresh quotes with current filter
         await fetchQuotes();
       }
+      
+      // Always reset submitting state after fetch completes
+      setSubmitting(false);
     } catch (err: any) {
       console.error("Quote approval error:", err);
       setError(err.message || "Failed to approve quote");
