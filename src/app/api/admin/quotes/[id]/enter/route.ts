@@ -8,7 +8,6 @@ import Carrier from "@/models/Carrier";
 import Agency from "@/models/Agency";
 import { generateBinderHTML } from "@/lib/services/pdf/BinderPDF";
 import { savePDFToStorage } from "@/lib/services/pdf/storage";
-import { getPuppeteerBrowser } from "@/lib/utils/puppeteer";
 import { logActivity, createActivityLogData } from "@/utils/activityLogger";
 
 /**
@@ -210,11 +209,10 @@ export async function POST(
 
       const htmlContent = generateBinderHTML(binderData);
 
-      // Generate PDF using puppeteer
-      const browser = await getPuppeteerBrowser();
-      const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfUint8Array = await page.pdf({
+      // Generate PDF using production service (PDFShift)
+      const { generatePDFFromHTML } = await import('@/lib/services/pdf/PDFService');
+      const pdfBuffer = await generatePDFFromHTML({
+        html: htmlContent,
         format: 'A4',
         printBackground: true,
         margin: {
@@ -224,10 +222,6 @@ export async function POST(
           left: '20px',
         },
       });
-      await browser.close();
-
-      // Convert Uint8Array to Buffer
-      const pdfBuffer = Buffer.from(pdfUint8Array);
 
       // Save PDF to storage
       const fileName = `binder-${quote._id.toString()}.pdf`;

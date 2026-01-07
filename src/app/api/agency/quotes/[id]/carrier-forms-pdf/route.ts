@@ -7,7 +7,6 @@ import Submission from "@/models/Submission";
 import Carrier from "@/models/Carrier";
 import { generateCarrierFormsHTML } from "@/lib/services/pdf";
 import { savePDFToStorage } from "@/lib/services/pdf/storage";
-import { getPuppeteerBrowser } from "@/lib/utils/puppeteer";
 import { logActivity, createActivityLogData } from "@/utils/activityLogger";
 
 /**
@@ -87,11 +86,10 @@ export async function GET(
     // Generate HTML
     const htmlContent = generateCarrierFormsHTML(carrierFormsData);
 
-    // Generate PDF using puppeteer
-    const browser = await getPuppeteerBrowser();
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfUint8Array = await page.pdf({
+    // Generate PDF using production service (PDFShift)
+    const { generatePDFFromHTML } = await import('@/lib/services/pdf/PDFService');
+    const pdfBuffer = await generatePDFFromHTML({
+      html: htmlContent,
       format: 'A4',
       printBackground: true,
       margin: {
@@ -101,10 +99,6 @@ export async function GET(
         left: '20px',
       },
     });
-    await browser.close();
-
-    // Convert Uint8Array to Buffer
-    const pdfBuffer = Buffer.from(pdfUint8Array);
 
     // Save PDF to storage
     const fileName = `carrier-forms-${quote._id.toString()}.pdf`;
@@ -133,7 +127,7 @@ export async function GET(
     );
 
     // Return PDF as response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="carrier-forms-${quote._id.toString()}.pdf"`,

@@ -5,7 +5,6 @@ import connectDB from "@/lib/mongodb";
 import Submission from "@/models/Submission";
 import Agency from "@/models/Agency";
 import { generateApplicationHTML } from "@/lib/services/pdf/ApplicationPDF";
-import { getPuppeteerBrowser } from "@/lib/utils/puppeteer";
 
 /**
  * GET /api/admin/submissions/[id]/pdf
@@ -62,27 +61,22 @@ export async function GET(
     // Generate HTML
     const htmlContent = generateApplicationHTML(applicationData);
 
-    // Generate PDF using puppeteer
-    const browser = await getPuppeteerBrowser();
-      const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfUint8Array = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '20px',
-          right: '20px',
-          bottom: '20px',
-          left: '20px',
-        },
-      });
-      await browser.close();
-
-      // Convert Uint8Array to Buffer
-      const pdfBuffer = Buffer.from(pdfUint8Array);
+    // Generate PDF using production service (PDFShift)
+    const { generatePDFFromHTML } = await import('@/lib/services/pdf/PDFService');
+    const pdfBuffer = await generatePDFFromHTML({
+      html: htmlContent,
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '20px',
+        right: '20px',
+        bottom: '20px',
+        left: '20px',
+      },
+    });
 
     // Return PDF as response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="application-${submission._id.toString()}.pdf"`,

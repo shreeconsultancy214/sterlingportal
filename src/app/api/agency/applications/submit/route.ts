@@ -5,7 +5,6 @@ import connectDB from "@/lib/mongodb";
 import Submission from "@/models/Submission";
 import Agency from "@/models/Agency";
 import { generateApplicationHTML } from "@/lib/services/pdf/ApplicationPDF";
-import { getPuppeteerBrowser } from "@/lib/utils/puppeteer";
 import { savePDFToStorage } from "@/lib/services/pdf/storage";
 
 /**
@@ -99,17 +98,11 @@ export async function POST(req: NextRequest) {
       const htmlContent = generateApplicationHTML(applicationData);
       console.log(`📄 HTML content length: ${htmlContent.length} characters`);
 
-      // Generate PDF using puppeteer
-      console.log("📄 Launching Puppeteer browser...");
-      const browser = await getPuppeteerBrowser();
-      console.log("📄 Browser launched successfully");
-      
-      const page = await browser.newPage();
-      console.log("📄 Setting page content...");
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      console.log("📄 Generating PDF...");
-      
-      const pdfUint8Array = await page.pdf({
+      // Generate PDF using production service (PDFShift)
+      console.log("📄 Generating PDF using PDFShift...");
+      const { generatePDFFromHTML } = await import('@/lib/services/pdf/PDFService');
+      pdfBuffer = await generatePDFFromHTML({
+        html: htmlContent,
         format: 'A4',
         printBackground: true,
         margin: {
@@ -119,13 +112,7 @@ export async function POST(req: NextRequest) {
           left: '20px',
         },
       });
-      
-      // Convert Uint8Array to Buffer
-      pdfBuffer = Buffer.from(pdfUint8Array);
       console.log(`📄 PDF generated - Size: ${pdfBuffer.length} bytes`);
-      
-      await browser.close();
-      console.log("📄 Browser closed");
 
       // Save PDF to storage
       const fileName = `application-${submission._id.toString()}.pdf`;
