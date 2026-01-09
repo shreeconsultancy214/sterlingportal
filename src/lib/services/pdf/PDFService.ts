@@ -135,8 +135,22 @@ export async function generatePDFFromHTML(options: PDFGenerationOptions): Promis
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
+        let errorData: any = {};
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          // If not JSON, use the text as-is
+          errorData = { error: errorText };
+        }
         console.error('[PDF Service] PDFShift API error:', response.status, errorText);
-        throw new Error(`PDFShift API error (${response.status}): ${errorText}`);
+        console.error('[PDF Service] PDFShift error data:', errorData);
+        
+        // Create a more detailed error message
+        const errorMessage = errorData.error || errorData.message || errorText || 'Unknown error';
+        const error = new Error(`PDFShift API error (${response.status}): ${errorMessage}`);
+        (error as any).status = response.status;
+        (error as any).code = errorData.code;
+        throw error;
       }
 
       const pdfBuffer = Buffer.from(await response.arrayBuffer());
@@ -150,15 +164,14 @@ export async function generatePDFFromHTML(options: PDFGenerationOptions): Promis
         code: error.code,
       });
       
-      // Check if it's a size limit error
-      const isSizeError = error.message.includes('too big') || 
-                         error.message.includes('2Mb') || 
-                         error.message.includes('2MB') ||
-                         error.message.includes('Document size too big');
-      
       // Log HTML size for debugging (minifiedHTML is now accessible)
       const htmlSizeKB = Buffer.byteLength(minifiedHTML, 'utf8') / 1024;
       console.error(`[PDF Service] HTML size was: ${htmlSizeKB.toFixed(2)} KB`);
+      
+      // Check if it's a size limit error - be more specific to avoid false positives
+      const isSizeError = (error.message.includes('Document size too big') || 
+                          error.message.includes('too big') && error.message.includes('2Mb')) &&
+                          htmlSizeKB > 1500; // Only consider it a size error if HTML is actually large
       
       // In production, if it's a size error, provide helpful message
       if (isSizeError) {
@@ -166,9 +179,11 @@ export async function generatePDFFromHTML(options: PDFGenerationOptions): Promis
         throw new Error(`PDF size too large (${htmlSizeKB.toFixed(2)} KB). The document exceeds PDFShift's 2MB limit. Please optimize the content or upgrade your PDFShift plan.`);
       }
       
-      // For other errors in production, provide clear error message
+      // For other errors in production, provide clear error message with actual error details
       if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-        throw new Error(`PDFShift failed: ${error.message}. Please check your PDFSHIFT_API_KEY and ensure it's configured in Vercel environment variables.`);
+        // Log the full error for debugging
+        console.error('[PDF Service] Full PDFShift error:', JSON.stringify(error, null, 2));
+        throw new Error(`PDFShift failed: ${error.message}. HTML size: ${htmlSizeKB.toFixed(2)} KB. Please check your PDFSHIFT_API_KEY and ensure it's configured correctly in Vercel environment variables.`);
       }
       
       // In development, fall through to Puppeteer/Browserless
