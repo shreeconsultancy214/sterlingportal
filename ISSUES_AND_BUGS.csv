@@ -1,0 +1,21 @@
+Issue ID,Severity,Category,File Path,Line,Problem,Impact,Suggested Fix
+1,CRITICAL,Environment,.env.local,3,Malformed NEXTAUTH_URL with backslash and trailing quote,Authentication will fail - NextAuth URL is broken,Remove backslash: NEXTAUTH_URL="http://localhost:3000"
+2,HIGH,Security,.env.local,1-12,Hardcoded secrets and credentials in .env.local,Passwords and API keys exposed if committed to repo,Move to .env.example template and use secure environment variables
+3,HIGH,Dependencies,package.json,36,Deprecated multer@1.4.5-lts.1 package,Known vulnerabilities and no longer maintained,Upgrade to multer 2.x: "multer": "^2.0.0"
+4,HIGH,Dependencies,package.json,33,Deprecated eslint@8.57.0 package,ESLint 8.x is no longer supported,Upgrade to eslint@11.x or use @eslint/eslint
+5,MEDIUM,Build,Multiple Model Files,N/A,Mongoose Duplicate Schema Index on stripePaymentIntentId,Index declared twice (schema.index and index:true),Remove duplicate index declaration from Payment model
+6,MEDIUM,Form Validation,src/app/api/submissions/route.ts,45,Missing clientEIN validation,Invalid data could be stored in database,Add proper validation for clientEIN format
+7,MEDIUM,Error Handling,src/app/api/agency/applications/[id]/pdf/route.ts,30,Bare catch block with no specific error type handling,Generic error responses without debugging info,Add specific error type checking and detailed error messages
+8,MEDIUM,Database,src/lib/mongodb.ts,10,Global variable pollution without proper type safety,Could cause race conditions in concurrent requests,Add proper type definition and connection pool management
+9,MEDIUM,API Security,src/app/api/auth/register/route.ts,35,No rate limiting on registration endpoint,Brute force and spam attacks possible,Add rate limiting middleware (use express-rate-limit or similar)
+10,MEDIUM,File Uploads,src/app/api/submissions/route.ts,1,No file validation before upload,Malicious files could be uploaded,Add file type and size validation before processing
+11,MEDIUM,Payment Integration,src/services/PaymentService.ts,75,Fallback to mock payment on Stripe error,Real payments might silently fail with mock fallback,Add explicit error alerts and logging for payment failures
+12,MEDIUM,PDF Generation,src/app/api/agency/applications/preview-pdf/route.ts,40,Database optional - falls back silently on error,Missing agency data in generated PDFs,Ensure database connection with proper error handling
+13,LOW,Code Quality,src/app/api/admin/submissions/route.ts,40,Dynamic model imports in API routes,Performance hit on every request,Import models at file level during module initialization
+14,LOW,Logging,Multiple files,Various,Inconsistent console.error usage without structured logging,Hard to debug in production,Implement Winston or Pino structured logging
+15,MEDIUM,Environment,src/lib/authOptions.ts,23,Circular dependency risk with model imports,Potential module resolution issues,Pre-import models at app initialization
+16,HIGH,Type Safety,src/app/api/agency/quotes/draft/route.ts,85,Type casting with 'as any' for QuoteDraft model,Loss of type safety and potential runtime errors,Create proper TypeScript model definition for QuoteDraft
+17,MEDIUM,Validation,src/app/api/admin/quotes/route.ts,50,Missing submissionId and carrierId validation,Invalid data stored in database,Add input validation for all required fields
+18,MEDIUM,API Security,src/app/api/agency/tools/requests/route.ts,44,No pagination on query results,Potential OOM errors with large datasets,Add limit and skip pagination parameters
+19,MEDIUM,Error Handling,src/app/api/tax/calculate/route.ts,35,No validation for premium parameter,Negative or invalid premium calculations possible,Add numeric validation and positive number check
+20,LOW,Code Organization,src/app/api/documents/[submissionId]/route.ts,46,Error message too generic,Difficult to debug issues,Return more specific error details in response
